@@ -20,11 +20,12 @@ def main():
         
         if stories:
             # Chama o nosso novo motor de extração
-            results = extractor.parse_and_filter(stories)
+            payload = extractor.build_memory_map(stories)
             logging.info("--- AMOSTRA DE TEXTOS LIMPOS ---")
-            for i, text in enumerate(results["sample"]):
+            for i, text in enumerate(payload["sample"]):
                 logging.info(f"[{i}] {text}")
-            logging.info("--------------------------------")
+            logging.info("--------------------------------\n")
+            logging.info(f"Lote preparado para a IA com {len(payload)} linhas mapeadas.")
             
     finally:
         extractor.cleanup()

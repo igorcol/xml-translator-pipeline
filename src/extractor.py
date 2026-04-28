@@ -13,6 +13,10 @@ class IDMLExtractor:
         # Diretório temporario seguro
         self.temp_dir = tempfile.mkdtemp(prefix="idml_pipeline_")
         self.stories_dir = os.path.join(self.temp_dir, "Stories")
+        # Dicionário para manter os arquivos XML abertos na memória
+        self.xml_trees = {} 
+        # Lista final que vai para o Gemini
+        self.translation_payload = []
 
     def unzip(self) -> str:
         """Descompacta o IDML no path temporário e retorna o caminho."""
@@ -85,6 +89,37 @@ class IDMLExtractor:
             "bypass_count": bypass_count,
             "sample": valid_texts[:5],  # Pega os 5 primeiros para validarmos
         }
+    
+    def build_memory_map(self, story_files: list[str]):
+        """
+        Carrega os XMLs na memória e mapeia os "nós" exatos que precisam de tradução.
+        """
+        bypass_count = 0
+        
+        for file_path in story_files:
+            tree = etree.parse(file_path)
+            # Salva a árvore XML na memória para sobrescrever
+            self.xml_trees[file_path] = tree 
+            
+            contents = tree.xpath("//*[local-name()='Content']")
+            
+            for node in contents:
+                text = node.text
+                if not text:
+                    continue
+                
+                if re.search(r'[a-zA-Z]', text):
+                    clean_text = text.strip()
+                    # Guarda o nó original e o texto
+                    self.translation_payload.append({
+                        "node": node, 
+                        "original_text": clean_text
+                    })
+                else:
+                    bypass_count += 1
+                    
+        logging.info(f"Mapeamento concluído: {len(self.translation_payload)} segmentos atrelados aos nós XML | {bypass_count} ignorados.")
+        return self.translation_payload
 
     def cleanup(self):
         """Apaga o path temporário."""
