@@ -21,10 +21,6 @@ def main():
         if stories:
             # Chama o nosso novo motor de extração
             payload = extractor.build_memory_map(stories)
-            logging.info("--- AMOSTRA DE TEXTOS LIMPOS ---")
-            for i, text in enumerate(payload["sample"]):
-                logging.info(f"[{i}] {text}")
-            logging.info("--------------------------------\n")
             logging.info(f"Lote preparado para a IA com {len(payload)} linhas mapeadas.")
             
     finally:
