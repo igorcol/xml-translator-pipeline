@@ -4,7 +4,7 @@ import logging
 import asyncio
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
-from prompts import SYSTEM_INSTRUCTION
+from config.prompts import SYSTEM_INSTRUCTION
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 

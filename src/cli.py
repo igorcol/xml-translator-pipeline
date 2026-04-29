@@ -1,8 +1,8 @@
 import os, logging, argparse, asyncio
-from extractor import IDMLExtractor
-from translator import OpenAITranslator
-from builder import IDMLBuilder
-from cache_manager import CacheManager
+from core.extractor import IDMLExtractor
+from core.translator import OpenAITranslator
+from core.builder import IDMLBuilder
+from infra.cache_manager import CacheManager
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
