@@ -43,7 +43,7 @@ O extrator (`lxml`) varre as tags e usa expressões regulares (`Regex`) para ide
     ```
 5. Coloque seu arquivo na pasta /data renomeado para manual.idml e rode a máquina:
     ```bash
-    python src/main.py
+    python src/cli.py
     ```
 
 ## Roadmap e Próximos Passos
