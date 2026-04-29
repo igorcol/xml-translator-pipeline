@@ -33,4 +33,10 @@ REGRAS DE SAÍDA:
 1. O array de saída DEVE ter o mesmo número exato de itens do array de entrada.
 2. NUNCA funda duas strings em uma.
 3. NUNCA devolva formatação markdown (como blocos ```json). Devolva APENAS o array JSON puro.
+
+⚠️ REGRA DE OURO:
+- O array de saída DEVE ter o mesmo número exato de itens do array de entrada.
+- NUNCA aglutine ou pule itens. 
+- Se um item for apenas um número, símbolo ou nome próprio que não precise de tradução, REPITA-O EXATAMENTE como no original.
+- Se você pular um único item, o sistema de arquivos será corrompido.
 """

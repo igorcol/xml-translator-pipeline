@@ -1,4 +1,7 @@
-import os, time, json, logging, asyncio
+import os
+import json
+import logging
+import asyncio
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from prompts import SYSTEM_INSTRUCTION
@@ -9,64 +12,50 @@ class OpenAITranslator:
     def __init__(self, batch_size=50, max_concurrency=5):
         load_dotenv()
         api_key = os.getenv("OPENAI_API_KEY")
-
         if not api_key:
-            raise ValueError("OPENAI_API_KEY Não encontrada no arquivo .env")
+            raise ValueError("OPENAI_API_KEY não encontrada.")
 
-        # Inicializa OpenAI Assíncrono
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = "gpt-4o-mini"
         self.batch_size = batch_size
         self.system_instruction = SYSTEM_INSTRUCTION
-
-        # SEMÁFORO: Garante que nunca tenha mais de 5 lotes ao mesmo tempo
         self.semaphore = asyncio.Semaphore(max_concurrency)
 
     def create_batches(self, payload: list) -> list:
-        return [
-            payload[i : i + self.batch_size]
-            for i in range(0, len(payload), self.batch_size)
-        ]
+        return [payload[i : i + self.batch_size] for i in range(0, len(payload), self.batch_size)]
+
+    async def _raw_translate(self, batch_texts: list[str]):
+        """Apenas a chamada de rede protegida pelo semáforo."""
+        prompt = f"Traduza este array JSON (Exatamente {len(batch_texts)} itens):\n{json.dumps(batch_texts, ensure_ascii=False)}"
+        
+        async with self.semaphore:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                response_format={ "type": "json_object" },
+                messages=[
+                    {"role": "system", "content": self.system_instruction + "\n\nRetorne um objeto JSON: {'translations': [strings]}"},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return json.loads(response.choices[0].message.content).get("translations", [])
 
     async def translate_batch(self, batch_texts: list[str], attempt=1) -> list[str]:
-        async with self.semaphore:
-            prompt = f"""
-            Traduza o seguinte array de textos do Inglês para o Português (Brasil).
-            MANTENHA EXATAMENTE o mesmo número de itens.
-            
-            {json.dumps(batch_texts, ensure_ascii=False)}
-            """
+        """Lógica de retry e validação de contagem."""
+        try:
+            translated_array = await self._raw_translate(batch_texts)
 
-            try:
-                response = await self.client.chat.completions.create(
-                    model=self.model,
-                    response_format={ "type": "json_object" },
-                    messages=[
-                        {"role": "system", "content": self.system_instruction + "\n\nRETORNE UM OBJETO JSON VÁLIDO COM UMA ÚNICA CHAVE CHAMADA 'translations' QUE CONTÉM O ARRAY DE STRINGS TRADUZIDAS."},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                
-                # Acessa texto da resposta e faz o parse do JSON
-                response_content = json.loads(response.choices[0].message.content)
-                translated_array = response_content.get("translations", [])
+            if len(translated_array) != len(batch_texts):
+                raise ValueError(f"Dessincronização detectada: {len(batch_texts)} em | {len(translated_array)} out.")
 
-                # Segurança estrutural
-                if len(translated_array) != len(batch_texts):
-                    raise ValueError(
-                        f"Dessincronização: {len(batch_texts)} itens enviados | {len(translated_array)} devolvidos."
-                    )
+            return translated_array
 
-                return translated_array
-
-            except Exception as e:
-                logging.error(f"Falha no lote (Tentativa {attempt}): {str(e)}")
-                
-                if attempt <= 3:
-                    sleep_time = 2 ** attempt
-                    logging.info(f"Retentando em {sleep_time} segundos...")
-                    await asyncio.sleep(sleep_time)
-                    return self.translate_batch(batch_texts, attempt + 1)
-                else:
-                    logging.error("Lote falhou após 3 tentativas. Abortando operação.")
-                    raise e
+        except Exception as e:
+            logging.error(f"Erro no Lote (Tentativa {attempt}): {e}")
+            if attempt <= 3:
+                wait = 2 ** attempt
+                logging.info(f"Retentando lote em {wait}s...")
+                await asyncio.sleep(wait)
+                return await self.translate_batch(batch_texts, attempt + 1)
+            else:
+                logging.error("/!\ Lote falhou após 3 tentativas...")
+                raise e
