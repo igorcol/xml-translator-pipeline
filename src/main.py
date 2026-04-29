@@ -1,7 +1,7 @@
 import os
 import logging
 from extractor import IDMLExtractor
-from translator import GeminiTranslator
+from translator import OpenAITranslator
 from builder import IDMLBuilder
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
@@ -17,7 +17,7 @@ def main():
         return
     
     extractor = IDMLExtractor(idml_file)
-    translator = GeminiTranslator(batch_size=50)
+    translator = OpenAITranslator(batch_size=50)
 
     try:
         # Extração
