@@ -9,7 +9,7 @@ from core.builder import IDMLBuilder
 from infra.cache_manager import CacheManager
 
 # ==========================
-DEBUG_MODE = False  # Deixar False em Produção para ativar a autolimpeza
+DEBUG_MODE = True  # Deixar False em Produção para ativar a autolimpeza
 # ==========================
 
 router = APIRouter(

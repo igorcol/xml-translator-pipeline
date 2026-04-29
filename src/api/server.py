@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging, sys, os
-from config.version import __version__
+from src.config.version import __version__
 
 # Força o Python a reconhecer a pasta 'src' como raiz de módulos
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
