@@ -9,7 +9,7 @@ class IDMLBuilder:
         self.temp_dir = temp_dir
         self.xml_trees = xml_trees
 
-    def inject_translation(self, payload: list, translations: list):
+    def inject_translations(self, payload: list, translations: list):
         """
         Injeta as traduções de volta nos nós XML que estão na memória.
         A precisão de índice garante que a formatação original do InDesign não quebre.
