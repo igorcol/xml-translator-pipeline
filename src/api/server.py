@@ -1,6 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
+import logging, sys, os
+
+# Força o Python a reconhecer a pasta 'src' como raiz de módulos
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Import de rotas
+from api.routes import router as translate_router
 
 # Configuração de log da API
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -24,6 +30,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+# Conecta as rotas
+app.include_router(translate_router)
 
 # Health check
 @app.get("/", tags=["Sistema"])
