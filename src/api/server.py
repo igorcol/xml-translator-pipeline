@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging, sys, os
+from config.version import __version__
 
 # Força o Python a reconhecer a pasta 'src' como raiz de módulos
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -11,7 +12,7 @@ from api.routes import router as translate_router
 # Configuração de log da API
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
-API_VERSION = "1.0.0-alpha.1"
+API_VERSION = __version__
 
 # Inicializa o App
 app = FastAPI(
