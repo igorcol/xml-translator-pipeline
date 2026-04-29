@@ -1,5 +1,5 @@
 import os, uuid, shutil, logging, asyncio
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 
 # Importa Core e Infra
@@ -8,13 +8,35 @@ from core.translator import OpenAITranslator
 from core.builder import IDMLBuilder
 from infra.cache_manager import CacheManager
 
+# ==========================
+DEBUG_MODE = False  # Deixar False em Produção para ativar a autolimpeza
+# ==========================
+
 router = APIRouter(
     prefix="/api/v1",
     tags=["Tradução"]
 )
 
+
+# * Limpar arquivos temporarios gerados pela API
+def cleanup_temp_files(input_path: str, output_path: str):
+    if DEBUG_MODE:
+        logging.info("🧹 [CLEANUP IGNORADO] DEBUG_MODE está Ativado. Os arquivos foram mantidos no servidor para inspeção.")
+        return
+    try:
+        if os.path.exists(input_path):
+            os.remove(input_path)
+        if os.path.exists(output_path):
+            os.remove(output_path)
+        logging.info("🧹 [CLEANUP CONCLUÍDO] Arquivos temporários foram apagados do servidor.")
+    except Exception as e:
+        logging.error(f"Erro ao tentar limpar arquivos residuais: {e}")
+
+
+#* ====== /TRANSLATE ======
 @router.post("/translate", response_class=FileResponse)
 async def translate_idml(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="O arquivo .idml original"),
     target_lang: str = Form("Português (Brasil)", description="O idioma alvo")
 ):
@@ -105,6 +127,9 @@ async def translate_idml(
     finally:
         cache.save()
         extractor.cleanup()
+
+    # Task de cleanup para rodar DEPOIS que o usuário baixar o arquivo gerado
+    background_tasks.add_task(cleanup_temp_files, input_path, output_path)
 
     # Retorna o arquivo como um Download
     return FileResponse(
