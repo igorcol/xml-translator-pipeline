@@ -1,4 +1,4 @@
-import os, logging, argparse
+import os, logging, argparse, asyncio
 from extractor import IDMLExtractor
 from translator import OpenAITranslator
 from builder import IDMLBuilder
@@ -29,12 +29,11 @@ def setup_cli():
         "-l", "--lang", default="Português (Brasil)", help="Idioma alvo"
     )
 
-    # [ EM BREVE ]
-    # --persona - Persona/Tom de voz para a IA
+    # [ EM BREVE ] --persona - Persona/Tom de voz para a IA
     parser.add_argument(
         "-p", "--persona", default="Professor Maker", help="[EM BREVE...]"
     )
-    # --resume - Usa o cache local para retomar traduções paradas (Em breve)
+    # [ EM BREVE ] --resume - Usa o cache local para retomar traduções paradas (Em breve)
     parser.add_argument(
         "--resume",
         action="store_true",
@@ -44,7 +43,7 @@ def setup_cli():
     return parser.parse_args()
 
 
-def main():
+async def main_async():
     args = setup_cli()
     idml_file = args.input
     output_file = (
@@ -57,79 +56,72 @@ def main():
         logging.error(f"Arquivo não encontrado: {idml_file}")
         return
 
-    # Inicializa as Máquinas
+    # Inicializa as Classes
     extractor = IDMLExtractor(idml_file)
-    translator = OpenAITranslator(batch_size=50)
-    cache = CacheManager()  # Nosso novo Cofre
+    translator = OpenAITranslator(batch_size=50, max_concurrency=5)
+    cache = CacheManager() 
 
     try:
         extractor.unzip()
         stories = extractor.get_story_files()
-        if not stories:
-            return
-
+        if not stories: return
+        
         payload = extractor.build_memory_map(stories)
-
-        # ==========================================
-        # A TRIAGEM DE CACHE
-        # ==========================================
+        
         total_items = len(payload)
-        final_translations = [None] * total_items  # Array do tamanho exato do XML
-
+        final_translations = [None] * total_items 
+        
         pending_texts = []
         pending_indices = []
-
-        # Verifica o Cofre (cache)
+        
         for i, item in enumerate(payload):
             original = item["original_text"]
             cached_translation = cache.get(original)
-
+            
             if cached_translation:
-                # Encontrou - Custo Zero.
                 final_translations[i] = cached_translation
             else:
-                # Inédito. Vai para o 'carrinho' da IA.
                 pending_texts.append(original)
                 pending_indices.append(i)
+                
+        logging.info(f"Triagem: {total_items - len(pending_texts)} no cofre | {len(pending_texts)} para IA.")
 
-        logging.info(
-            f"Triagem concluída: {total_items - len(pending_texts)} resgatados do cofre | {len(pending_texts)} enviados para IA."
-        )
-
-        # Processa apenas os inéditos na API
         if pending_texts:
             batches = translator.create_batches(pending_texts)
-            logging.info(f"Iniciando tradução de {len(batches)} lotes inéditos...")
-
-            processed_count = 0
+            logging.info(f"Iniciando Motor Assíncrono para {len(batches)} lotes...")
+            
+            # Cria a lista de promessas (tasks)
+            async def process_task(batch, chunk_texts, chunk_indices, batch_idx):
+                logging.info(f"-> Disparando Lote {batch_idx}")
+                translated_batch = await translator.translate_batch(batch)
+                logging.info(f"<- Lote {batch_idx} Retornou!")
+                return translated_batch, chunk_texts, chunk_indices
+            
+            tasks = []
             for i, batch in enumerate(batches):
-                logging.info(f"Processando lote {i+1}/{len(batches)}...")
-                translated_batch = translator.translate_batch(batch)
-
-                # Guarda o resultado no cache e mapeia de volta na posição correta do XML
+                # Recorta os textos e os indices originais referentes a este batch
+                chunk_texts = pending_texts[i*translator.batch_size : (i+1)*translator.batch_size]
+                chunk_indices = pending_indices[i*translator.batch_size : (i+1)*translator.batch_size]
+                tasks.append(process_task(batch, chunk_texts, chunk_indices, i+1))
+                
+            # O as_completed processa as promessas na ordem em que terminam
+            for task in asyncio.as_completed(tasks):
+                translated_batch, chunk_texts, chunk_indices = await task
+                
+                # Injeta de volta na posição exata
                 for j, translated_text in enumerate(translated_batch):
-                    original_idx = pending_indices[processed_count]
-                    original_text = pending_texts[processed_count]
-
-                    final_translations[original_idx] = translated_text
-                    cache.set(original_text, translated_text)
-
-                    processed_count += 1
-
-                # Salva o cache
-                cache.save()
-        else:
-            logging.info("100% dos textos já estavam no cofre! Bypass total da API.")
-
-        # ==========================================
-        # RECONSTRUÇÃO
-        # ==========================================
+                    final_translations[chunk_indices[j]] = translated_text
+                    cache.set(chunk_texts[j], translated_text)
+                    
+                cache.save() # Salva a cada lote que volta
+                
+        # Reconstrução
         builder = IDMLBuilder(extractor.temp_dir, extractor.xml_trees)
         builder.inject_translations(payload, final_translations)
         builder.save_xml_files()
         builder.repackage(output_file)
-
-        logging.info(f"SUCESSO! Arquivo salvo em: {output_file}")
+        
+        logging.info(f"SUCESSO ABSOLUTO! Arquivo salvo em: {output_file}")
 
     except Exception as e:
         logging.error(f"O pipeline falhou: {e}")
@@ -138,10 +130,9 @@ def main():
             "\nProcesso interrompido pelo usuário (Ctrl+C). Fechando o cofre com segurança..."
         )
     finally:
-        # O cofre SEMPRE é salvo antes do script cair
         cache.save()
         extractor.cleanup()
 
 
 if __name__ == "__main__":
-    main()
+    main_async()
