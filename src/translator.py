@@ -19,53 +19,57 @@ class GeminiTranslator:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel("gemini-2.5-flash")
         self.batch_size = batch_size
-
-        # Persona da IA
         self.system_instruction = SYSTEM_INSTRUCTION
 
     def create_batches(self, payload: list) -> list:
-        """Separa a lista inteira em lotes menores baseados no batch_size."""
         return [
             payload[i : i + self.batch_size]
             for i in range(0, len(payload), self.batch_size)
         ]
 
     def translate_batch(self, batch_texts: list[str], attempt=1) -> list[str]:
-        """
-        Envia um batch para a API forçando a saída em JSON.
-        Inclui retentativa automática em caso de falha.
-        """
         prompt = f"""
         {self.system_instruction}
         
-        Traduza o seguinte array JSON de textos do Inglês para o Português (Brasil) de acordo com a sua persona dada.
+        Traduza o seguinte array de textos do Inglês para o Português (Brasil) de acordo com a sua persona dada.
         MANTENHA EXATAMENTE o mesmo número de itens no array de resposta.
-        Retorne APENAS um array JSON válido, sem formatação markdown (sem ```json), apenas o array puro:
         
         {json.dumps(batch_texts, ensure_ascii=False)}
         """
 
         try:
-            response = self.model.generate_content(prompt)
-            # Limpeza rapido caso IA mande blocos md
-            clean_response = (
-                response.text.replace("```json", "").replace("```", "").strip()
+            # Força o MIME Type para JSON puro na SDK.
+            # impede que a IA escreva texto fora do array ou quebre aspas.
+            response = self.model.generate_content(
+                prompt,
+                generation_config={"response_mime_type": "application/json"}
             )
-            translated_array = json.loads(clean_response)
+            
+            translated_array = json.loads(response.text)
 
             # Validação de segurança
             if len(translated_array) != len(batch_texts):
                 raise ValueError(
-                    f"Dessincronização: {len(batch_texts)} itens enviados | {len(translated_array)} devolvidos pela IA."
+                    f"Dessincronização: {len(batch_texts)} itens enviados | {len(translated_array)} devolvidos."
                 )
 
+            # Sleep para não estourar os 15 RPM do plano gratuito
+            time.sleep(4) 
             return translated_array
 
         except Exception as e:
-            logging.error(f"Falha no lote (Tentativa {attempt}): {e}")
+            error_msg = str(e)
+            logging.error(f"Falha no lote (Tentativa {attempt}): {error_msg}")
+            
             if attempt <= 3:
-                sleep_time = 2**attempt  # 2s, 4s, 8s...
-                logging.info(f"Retentando em {sleep_time} segundos...")
+                # Tratamento de precisão para Rate Limit (Erro 429)
+                if "429" in error_msg or "Quota" in error_msg:
+                    sleep_time = 62 # O Google pede 56s
+                    logging.warning(f"Limite do Free Tier atingido. Resfriando o motor por {sleep_time} segundos...")
+                else:
+                    sleep_time = 2 ** attempt
+                    logging.info(f"Retentando em {sleep_time} segundos...")
+                    
                 time.sleep(sleep_time)
                 return self.translate_batch(batch_texts, attempt + 1)
             else:
