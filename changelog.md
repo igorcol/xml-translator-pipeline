@@ -5,14 +5,13 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato baseia-se em [Keep a Changelog](https://keepachangelog.com/), e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ---
-## [1.0.0-alpha.1.2]
+## [1.0.0-alpha.2] - Self-Healing Absoluto (Sniper Mode)
 
-### Fixed
+### Adicionado
+- **Modo Sniper (Ultimate Fallback):** Implementação de um mecanismo de degradação graciosa no `OpenAITranslator`. Quando um lote falha o limite máximo de retentativas (3x) por dessincronização, o motor não aborta mais a requisição. Ele quebra o lote e realiza chamadas individuais (1-by-1) para a API, garantindo 100% de sucesso na sincronia do XML sem interromper o fluxo do arquivo.
 
-- **Persona**
-- **Transaltor 1-by-1 sniper lá do bgl (n sei se fica em fixxed ou em added)**
-    No doc.md ou readme adicionar sobre isso, e como resolvemos por enquanto.
-
+### Corrigido
+- **System Prompt Strict Rules:** Adição de travas de segurança explícitas no `config/prompts.py` (Persona) proibindo a IA de fundir ou concatenar fragmentos isolados (ex: strings que contêm apenas uma palavra ou pontuação), mitigando o comportamento "prestativo" do LLM de tentar consertar quebras visuais do InDesign.
 ---
 
 ## [1.0.0-alpha.1] — Motor Web Isolado (Core Engine API)
