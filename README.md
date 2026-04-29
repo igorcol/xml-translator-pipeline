@@ -1,6 +1,8 @@
 # IDML Translation Engine
 
-Backend em Python que traduz arquivos nativos do Adobe InDesign (`.idml`) com LLM, preservando 100% do layout original. Construí porque um freela me consumiu 5 horas de cliques manuais que poderiam ter sido 5 minutos.
+Backend em Python que traduz arquivos nativos do Adobe InDesign (`.idml`) com LLM, preservando 100% do layout original. Construí porque um freelance me consumiu 5 horas de cliques manuais que poderiam ter sido 5 minutos.
+
+📖 **[Leia a Documentação Técnica e Aprendizados de Engenharia detalhados aqui (DOC.md)](DOC.md)**
 
 ---
 
@@ -84,7 +86,9 @@ async def translate_batch(strings: list[str]) -> list[str]:
         # Dessync detectada
         dump_for_audit(strings, result, attempt)
         await asyncio.sleep(2 ** attempt)  # exponential backoff
-    raise PayloadDesyncError(...)
+    
+    # Se falhar 3x, o lote está envenenado. Ativa o Sniper Mode.
+    return await translate_1_by_1(strings)
 ```
 
 O que esse circuito garante:
@@ -93,6 +97,7 @@ O que esse circuito garante:
 - **Auditoria automática** de cada falha em `debug_desync.json` pra eu poder analisar padrões depois.
 - **Backoff exponencial** entre tentativas - 1s, 2s, 4s. Dá tempo do modelo "esfriar" e reduz pressão em rate limit.
 - **Convergência forçada** - em 3-4 tentativas a LLM acerta o len. Não vi um caso real de payload que não convergiu até hoje.
+- **Sniper Mode (Degradação Graciosa) -** Ocasionalmente, o InDesign quebra uma frase no meio. A LLM recebe fragmentos isolados e tenta "ajudar" fundindo-os numa frase só. Se o lote falhar 3 vezes, o motor entra em Sniper Mode: desmembra o lote envenenado e envia 1 string por chamada à API. Absorvemos o hit de latência, mas a dessincronização torna-se matematicamente impossível. O sistema não dá crash.
 
 Esse é o pedaço do sistema que mais aprendi construindo. Tratar LLM como worker não-determinístico que falha de formas previsíveis muda como você projeta tudo em volta.
 
@@ -137,6 +142,14 @@ Três decisões que separam protótipo de coisa que dá pra rodar 1.000 vezes se
 
 ---
 
+## 📖 Deep Dive Técnico & Aprendizados
+
+Este README é apenas a superfície. Se quiser entender o fluxo de vida exato da requisição, como o split de filas em memória funciona (O(1)), e a dissecção completa do *Mecanismo de Auto-Cura*, leia o documento técnico:
+
+👉 **[DOC.md — Documentação Técnica](DOC.md)**
+
+---
+
 ## Stack
 
 Python 3.11 · FastAPI · asyncio · lxml · Pydantic · OpenAI/Gemini SDK · zipfile (stdlib)
@@ -158,7 +171,7 @@ Endpoint disponível em `localhost:8000/api/v1/translate`.
 
 ## Status
 
-`v1.0.0-beta.1`. Em uso real pra projetos de tradução técnica. Arquitetura projetada pra evoluir pra serviço multi-tenant, fila de jobs, dashboard de TM compartilhada por cliente, billing por volume traduzido. Mercado óbvio: agências de tradução técnica e editoras que trabalham com manuais industriais em InDesign e hoje fazem o mesmo fluxo manual que eu fiz.
+`v1.0.0-alpha.2`. Em uso real pra projetos de tradução técnica. Arquitetura projetada pra evoluir pra serviço multi-tenant, fila de jobs, dashboard de TM compartilhada por cliente, billing por volume traduzido. Mercado óbvio: agências de tradução técnica e editoras que trabalham com manuais industriais em InDesign e hoje fazem o mesmo fluxo manual que eu fiz.
 
 Se você é desse mercado e quer conversar, [me chama](mailto:igorcolombini@gmail.com).
 

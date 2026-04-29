@@ -1,6 +1,6 @@
 # Documentação Técnica — IDML Translation Engine
 
-**Versão:** `v1.0.0-beta.1`
+**Versão:** `v1.0.0-alpha.2`
 
 ---
 
@@ -66,10 +66,15 @@ Os itens "Pendentes" são processados de forma concorrente.
 - **Concurrency Control:** Um `asyncio.Semaphore(5)` restringe a execução para no máximo 5 chamadas simultâneas à API externa, evitando banimentos por Rate Limit (HTTP 429).
 - **Execução via `asyncio.gather`:** As coroutines disparam simultaneamente e o Python cede a thread enquanto aguarda o I/O da rede.
 
-**O Mecanismo de Auto-Cura (Self-Healing Algorithm):**
+**O Mecanismo de Auto-Cura e Degradação Graciosa (Sniper Mode):**
 
-- **O Problema:** LLMs frequentemente "resumem" dados, unindo strings duplicadas ou ignorando blocos curtos, resultando em dessincronização de payload (ex: envia 50 strings, recebe 49).
-- **A Solução:** O worker avalia `len(input) == len(output)`. Se falhar, a classe captura a exceção, realiza o dump do I/O conflitante para auditoria interna (`debug_desync.json`), e engatilha um loop recursivo com Exponential Backoff (`wait = 2 ** attempt`). Após 3 a 4 retentativas forçadas, a IA corrige a sincronia e o lote passa com segurança.
+- **O Problema (O Anti-Padrão da "IA Prestativa"):** Ocasionalmente, o InDesign fragmenta uma única frase em múltiplos nós XML (ex: quando uma palavra no meio da frase possui uma formatação distinta). O LLM, treinado para gerar linguagem natural coerente, recebe o array fragmentado e tenta "corrigir", fundindo os itens em uma string única (Ex: Input de 50 itens gera um Output de 49). Isso quebra a paridade 1:1 estritamente necessária para a injeção reversa no XML.
+
+- **Defesa de Nível 1 (Prompt Engineering):** O System Prompt no config/prompts.py força regras estritas de não-concatenação e preservação de fragmentos isolados, atuando como a primeira barreira.
+
+- **Defesa de Nível 2 (Exponential Backoff):** Se o worker avalia len(input) != len(output), a classe captura a exceção, realiza o dump do I/O conflitante para auditoria interna (debug_desync.json), e engatilha um loop recursivo com atraso exponencial (wait = 2 ** attempt).
+
+- **Defesa de Nível 3 (Ultimate Fallback - Sniper Mode):** Se um lote falha por 3 tentativas consecutivas, o orquestrador assume que a amostra possui um viés irrecuperável na IA em modo batch. O sistema interrompe o fluxo normal e degrada graciosamente para o Modo Sniper. O lote de 50 é desmembrado e enviado em chamadas unitárias (1-by-1). Como o input passa a ser 1, uma dessincronização de array torna-se impossível. O sistema absorve o impacto temporal da rede, mas garante 100% de integridade estrutural ao artefato final.
 
 ### Fase 5: Injeção Reversa e Reconstrução (`IDMLBuilder`)
 
