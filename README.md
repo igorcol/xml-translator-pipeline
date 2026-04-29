@@ -91,8 +91,8 @@ O que esse circuito garante:
 
 - **Detecção determinística** via assert de cardinalidade. Não confio no que a LLM diz que fez, conto o que ela entregou.
 - **Auditoria automática** de cada falha em `debug_desync.json` pra eu poder analisar padrões depois.
-- **Backoff exponencial** entre tentativas — 1s, 2s, 4s. Dá tempo do modelo "esfriar" e reduz pressão em rate limit.
-- **Convergência forçada** — em 3-4 tentativas a LLM acerta o len. Não vi um caso real de payload que não convergiu até hoje.
+- **Backoff exponencial** entre tentativas - 1s, 2s, 4s. Dá tempo do modelo "esfriar" e reduz pressão em rate limit.
+- **Convergência forçada** - em 3-4 tentativas a LLM acerta o len. Não vi um caso real de payload que não convergiu até hoje.
 
 Esse é o pedaço do sistema que mais aprendi construindo. Tratar LLM como worker não-determinístico que falha de formas previsíveis muda como você projeta tudo em volta.
 
@@ -117,7 +117,7 @@ for element in tree.iter():
             })
 ```
 
-A chave dessa abordagem está em `"node": element`. Eu guardo a referência ao objeto Python, não uma cópia. Quando o lote volta da LLM traduzido, faço `node.text = translation[i]` e a árvore inteira do lxml é mutada in-place. As tags de estilo, fontes, kerning, alinhamento — tudo isso continua exatamente como estava porque eu nunca toquei nesses atributos.
+A chave dessa abordagem está em `"node": element`. Eu guardo a referência ao objeto Python, não uma cópia. Quando o lote volta da LLM traduzido, faço `node.text = translation[i]` e a árvore inteira do lxml é mutada in-place. As tags de estilo, fontes, kerning, alinhamento. Tudo isso continua exatamente como estava porque eu nunca toquei nesses atributos.
 
 O designer abre o arquivo final no InDesign e não vê uma vírgula fora do lugar. Isso só funciona porque o sistema decidiu desde o início **operar abaixo da camada que o InDesign tenta proteger**, em vez de tentar replicar o que ele faz.
 
@@ -131,7 +131,7 @@ Três decisões que separam protótipo de coisa que dá pra rodar 1.000 vezes se
 
 **Semáforo controlando concorrência.** `asyncio.Semaphore(5)` limita pra 5 chamadas simultâneas à API externa. O `asyncio.gather` dispara o lote, o semáforo segura o que excede. Resultado: throughput alto sem disparar rate limit (HTTP 429) que banem a chave por horas.
 
-**Batching de 50 strings por chamada.** Em vez de 50 chamadas com 1 string cada, faço 1 chamada com array de 50. A LLM ganha contexto macro do documento (melhora a qualidade da tradução técnica) e o overhead de rede cai 50x. O trade-off é que aumenta a chance de dessincronização — daí a necessidade do circuito de self-healing acima.
+**Batching de 50 strings por chamada.** Em vez de 50 chamadas com 1 string cada, faço 1 chamada com array de 50. A LLM ganha contexto macro do documento (melhora a qualidade da tradução técnica) e o overhead de rede cai 50x. O trade-off é que aumenta a chance de dessincronização. Daí a necessidade do circuito de self-healing acima.
 
 **Auto-cleanup pós-stream.** Depois que o `FileResponse` entrega o `.idml` traduzido, uma `BackgroundTask` do FastAPI deleta os arquivos brutos do disco. Documentos de cliente nunca persistem ociosos. Só o cache de TM (que armazena fragmentos descontextualizados) fica.
 
@@ -158,7 +158,7 @@ Endpoint disponível em `localhost:8000/api/v1/translate`.
 
 ## Status
 
-`v1.0.0-beta.1`. Em uso real pra projetos de tradução técnica. Arquitetura projetada pra evoluir pra serviço multi-tenant — fila de jobs, dashboard de TM compartilhada por cliente, billing por volume traduzido. Mercado óbvio: agências de tradução técnica e editoras que trabalham com manuais industriais em InDesign e hoje fazem o mesmo fluxo manual que eu fiz.
+`v1.0.0-beta.1`. Em uso real pra projetos de tradução técnica. Arquitetura projetada pra evoluir pra serviço multi-tenant, fila de jobs, dashboard de TM compartilhada por cliente, billing por volume traduzido. Mercado óbvio: agências de tradução técnica e editoras que trabalham com manuais industriais em InDesign e hoje fazem o mesmo fluxo manual que eu fiz.
 
 Se você é desse mercado e quer conversar, [me chama](mailto:igorcolombini@gmail.com).
 
