@@ -52,7 +52,8 @@ class OpenAITranslator:
                     "input_texts": batch_texts,
                     "output_textts": translated_array
                 }
-                debug_file = "data/debug_desync.json"
+                debug_file = "data/output/debug_desync.json"
+                os.makedirs(os.path.dirname(debug_file), exist_ok=True)
                 with open(debug_file, "w", encoding="UTF-8") as f:
                     json.dump(debug_data, f, ensure_ascii=False, indent=2)
 

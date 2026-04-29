@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 def setup_cli():
     parser = argparse.ArgumentParser(description="IDML Translator Pipeline")
 
-    parser.add_argument("-i", "--input", default="data/manual.idml", help="Caminho para o arquivo .idml de origem")
+    parser.add_argument("-i", "--input", default="data/input/manual.idml", help="Caminho para o arquivo .idml de origem")
     parser.add_argument("-o", "--output", required=False, help="Caminho para salvar o arquivo traduzido (opcional)")
     parser.add_argument("-l", "--lang", default="Português (Brasil)", help="Idioma alvo")
     parser.add_argument("-p", "--persona", default="Professor Maker", help="[EM BREVE...]")
@@ -20,7 +20,13 @@ def setup_cli():
 async def main_async():
     args = setup_cli()
     idml_file = args.input
-    output_file = args.output if args.output else f"{os.path.splitext(idml_file)[0]}_traduzido.idml"
+
+    if args.output:
+        output_file = args.output
+    else:
+        base_name = os.path.basename(idml_file)
+        name_only, ext = os.path.splitext(base_name)
+        output_file = f"data/output/{name_only}_traduzido{ext}"
 
     if not os.path.exists(idml_file):
         logging.error(f"Arquivo não encontrado: {idml_file}")

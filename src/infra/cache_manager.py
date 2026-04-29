@@ -3,7 +3,7 @@ import os, json, logging
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
 class CacheManager:
-    def __init__(self, cache_file="data/translation_cache.json"):
+    def __init__(self, cache_file="data/cache/translation_cache.json"):
         self.cache_file = cache_file
         self.cache = self._load_cache()
 
