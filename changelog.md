@@ -5,6 +5,15 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato baseia-se em [Keep a Changelog](https://keepachangelog.com/), e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ---
+## [1.0.0-alpha.1.2]
+
+### Fixed
+
+- **Persona**
+- **Transaltor 1-by-1 sniper lá do bgl (n sei se fica em fixxed ou em added)**
+    No doc.md ou readme adicionar sobre isso, e como resolvemos por enquanto.
+
+---
 
 ## [1.0.0-alpha.1] — Motor Web Isolado (Core Engine API)
 

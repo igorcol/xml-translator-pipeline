@@ -69,5 +69,27 @@ class OpenAITranslator:
                 await asyncio.sleep(wait)
                 return await self.translate_batch(batch_texts, attempt + 1)
             else:
-                logging.error("ERRO: Lote falhou após 3 tentativas...")
-                raise e
+                # ========= SNIPER 1:1 =========
+                # Tenta traduzir item por item no lote com desync após as 3 tentativas falhas
+                logging.warning("⚠️ Lote irrecuperável por dessincronização. Ativando Modo Sniper (1-1)...")
+                sniper_results = []
+
+                for item in batch_texts:
+                    # Ignore strings vazias ou só espaço - Pula a ia
+                    if not item.strip():
+                        sniper_results.append(item)
+                        continue
+
+                    try:
+                        # Reutiliza a raw_translate mas mandando array de 1 item
+                        res = await self._raw_translate([item])
+                        sniper_results.append(res[0])
+                    except Exception as sniper_e:
+                        logging.error(f"Modo 1-1 falhou no item '{item}': {sniper_e}")
+                        # Último recurso: mantém o original para NUNCA quebrar o arquivo IDML
+                        sniper_results.append(item)
+
+                logging.info("✅ Modo 1-1 concluído. Salvos e sincronizados!")
+                return sniper_results
+        
+      

@@ -39,4 +39,10 @@ REGRAS DE SAÍDA:
 - NUNCA aglutine ou pule itens. 
 - Se um item for apenas um número, símbolo ou nome próprio que não precise de tradução, REPITA-O EXATAMENTE como no original.
 - Se você pular um único item, o sistema de arquivos será corrompido.
+
+REGRAS ESTRITAS DE SINCRONIA:
+1. Você DEVE traduzir cada item do array de forma 1-para-1.
+2. NUNCA funda ou concatene fragmentos, mesmo que eles pareçam partes da mesma frase. 
+3. Se um item for apenas "block.", traduza apenas como "bloco.". Não tente juntar com a frase anterior.
+4. O array de saída DEVE ter EXATAMENTE o mesmo número de elementos do array de entrada.
 """
