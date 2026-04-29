@@ -38,13 +38,24 @@ class OpenAITranslator:
                 ]
             )
             return json.loads(response.choices[0].message.content).get("translations", [])
-
+        
     async def translate_batch(self, batch_texts: list[str], attempt=1) -> list[str]:
         """Lógica de retry e validação de contagem."""
         try:
             translated_array = await self._raw_translate(batch_texts)
 
             if len(translated_array) != len(batch_texts):
+                # Gera um arquivo de "logs" para debug
+                debug_data = {
+                    "input_lenght": len(batch_texts),
+                    "output_lenght": len(translated_array),
+                    "input_texts": batch_texts,
+                    "output_textts": translated_array
+                }
+                debug_file = "data/debug_desync.json"
+                with open(debug_file, "w", encoding="UTF-8") as f:
+                    json.dump(debug_data, f, ensure_ascii=False, indent=2)
+
                 raise ValueError(f"Dessincronização detectada: {len(batch_texts)} em | {len(translated_array)} out.")
 
             return translated_array

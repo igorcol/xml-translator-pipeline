@@ -26,7 +26,6 @@ async def main_async():
         logging.error(f"Arquivo não encontrado: {idml_file}")
         return
 
-    # Inicializa as Classes
     extractor = IDMLExtractor(idml_file)
     translator = OpenAITranslator(batch_size=50, max_concurrency=5)
     cache = CacheManager() 
@@ -37,7 +36,6 @@ async def main_async():
         if not stories: return
         
         payload = extractor.build_memory_map(stories)
-        
         total_items = len(payload)
         final_translations = [None] * total_items 
         
@@ -60,16 +58,23 @@ async def main_async():
             batches = translator.create_batches(pending_texts)
             logging.info(f"Iniciando Motor Assíncrono para {len(batches)} lotes...")
             
-            # A função empacotadora que mantém os logs vivos e bonitos
+            # Task salva o cache imediatamente ao concluir
             async def process_task(batch, chunk_texts, chunk_indices, batch_idx):
                 logging.info(f"-> Disparando Lote {batch_idx}")
                 try:
                     translated_batch = await translator.translate_batch(batch)
-                    logging.info(f"<- Lote {batch_idx} Retornou!")
-                    return translated_batch, chunk_texts, chunk_indices
+                    
+                    # Salva direto no cofre assim que volta
+                    for j, translated_text in enumerate(translated_batch):
+                        final_translations[chunk_indices[j]] = translated_text
+                        cache.set(chunk_texts[j], translated_text)
+                    cache.save()
+                    
+                    logging.info(f"<- Lote {batch_idx} Retornou e foi salvo no cofre!")
+                    return True
                 except Exception as e:
                     logging.error(f"<- Lote {batch_idx} FALHOU fatalmente: {e}")
-                    raise e
+                    return False
             
             tasks = []
             for i, batch in enumerate(batches):
@@ -77,19 +82,15 @@ async def main_async():
                 chunk_indices = pending_indices[i*translator.batch_size : (i+1)*translator.batch_size]
                 tasks.append(process_task(batch, chunk_texts, chunk_indices, i+1))
                 
-            # Dispara todos ao mesmo tempo (respeitando o semáforo de 5) e aguarda tudo terminar
-            results = await asyncio.gather(*tasks)
+            # return_exceptions=True garante que se um lote quebrar, os outros continuam.
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # Processa as respostas e salva no cache
-            for translated_batch, chunk_texts, chunk_indices in results:
-                # Injeta de volta na posição exata
-                for j, translated_text in enumerate(translated_batch):
-                    final_translations[chunk_indices[j]] = translated_text
-                    cache.set(chunk_texts[j], translated_text)
-                    
-                cache.save() # Salva a cada lote mapeado com sucesso
+            # Se algum lote retornou falhou, aborta a reconstrução do IDML
+            if not all(results):
+                logging.error("Um ou mais lotes falharam. O arquivo IDML não será gerado para evitar corrupção, mas os lotes bem sucedidos foram salvos no cofre.")
+                return
                 
-        # Reconstrução
+        # Reconstrução só acontece se 100% dos dados estiverem OK
         builder = IDMLBuilder(extractor.temp_dir, extractor.xml_trees)
         builder.inject_translations(payload, final_translations)
         builder.save_xml_files()
