@@ -57,5 +57,5 @@ class OpenAITranslator:
                 await asyncio.sleep(wait)
                 return await self.translate_batch(batch_texts, attempt + 1)
             else:
-                logging.error("/!\ Lote falhou após 3 tentativas...")
+                logging.error("ERRO: Lote falhou após 3 tentativas...")
                 raise e
