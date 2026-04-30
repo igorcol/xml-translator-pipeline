@@ -45,7 +45,7 @@ async def main_async():
         total_items = len(payload)
         final_translations = [None] * total_items 
         
-        pending_texts = []
+        pending_items = []
         pending_indices = []
         
         for i, item in enumerate(payload):
@@ -55,27 +55,27 @@ async def main_async():
             if cached_translation:
                 final_translations[i] = cached_translation
             else:
-                pending_texts.append(original)
+                pending_items.append(item)
                 pending_indices.append(i)
                 
-        logging.info(f"Triagem: {total_items - len(pending_texts)} no cofre | {len(pending_texts)} para IA.")
+        logging.info(f"Triagem: {total_items - len(pending_items)} no cofre | {len(pending_items)} para IA.")
 
-        if pending_texts:
-            batches = translator.create_batches(pending_texts)
+        if pending_items:
+            batches = translator.create_batches(pending_items)
             logging.info(f"Iniciando Motor Assíncrono para {len(batches)} lotes...")
             
-            # Task salva o cache imediatamente ao concluir
-            async def process_task(batch, chunk_texts, chunk_indices, batch_idx):
+            async def process_task(batch, chunk_items, chunk_indices, batch_idx):
                 logging.info(f"-> Disparando Lote {batch_idx}")
                 try:
                     translated_batch = await translator.translate_batch(batch)
                     
-                    # Salva direto no cofre assim que volta
                     for j, translated_text in enumerate(translated_batch):
                         final_translations[chunk_indices[j]] = translated_text
-                        cache.set(chunk_texts[j], translated_text)
-                    cache.save()
+                        
+                        original_str = chunk_items[j]["original_text"]
+                        cache.set(original_str, translated_text)
                     
+                    cache.save()
                     logging.info(f"<- Lote {batch_idx} Retornou e foi salvo no cofre!")
                     return True
                 except Exception as e:
@@ -84,30 +84,29 @@ async def main_async():
             
             tasks = []
             for i, batch in enumerate(batches):
-                chunk_texts = pending_texts[i*translator.batch_size : (i+1)*translator.batch_size]
-                chunk_indices = pending_indices[i*translator.batch_size : (i+1)*translator.batch_size]
-                tasks.append(process_task(batch, chunk_texts, chunk_indices, i+1))
+                start_ptr = i * translator.batch_size
+                end_ptr = (i + 1) * translator.batch_size
                 
-            # return_exceptions=True garante que se um lote quebrar, os outros continuam.
+                chunk_items = pending_items[start_ptr : end_ptr]
+                chunk_indices = pending_indices[start_ptr : end_ptr]
+                
+                tasks.append(process_task(batch, chunk_items, chunk_indices, i+1))
+                
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # Se algum lote retornou falhou, aborta a reconstrução do IDML
             if not all(results):
-                logging.error("Um ou mais lotes falharam. O arquivo IDML não será gerado para evitar corrupção, mas os lotes bem sucedidos foram salvos no cofre.")
+                logging.error("Um ou mais lotes falharam. O arquivo IDML não será gerado.")
                 return
                 
-        # Reconstrução só acontece se 100% dos dados estiverem OK
         builder = IDMLBuilder(extractor.temp_dir, extractor.xml_trees)
         builder.inject_translations(payload, final_translations)
         builder.save_xml_files()
         builder.repackage(output_file)
         
-        logging.info(f"SUCESSO ABSOLUTO! Arquivo salvo em: {output_file}")
+        logging.info(f"SUCESSO! Arquivo salvo em: {output_file}")
 
     except Exception as e:
         logging.error(f"O pipeline falhou: {e}")
-    except KeyboardInterrupt:
-        logging.warning("\nProcesso interrompido pelo usuário (Ctrl+C). Fechando o cofre com segurança...")
     finally:
         cache.save()
         extractor.cleanup()

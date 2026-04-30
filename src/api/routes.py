@@ -72,7 +72,7 @@ async def translate_idml(
         
         payload = extractor.build_memory_map(stories)
         final_translations = [None] * len(payload)
-        pending_texts, pending_indices = [], []
+        pending_items, pending_indices = [], []
         
         # Triagem de Cache
         for i, item in enumerate(payload):
@@ -81,21 +81,25 @@ async def translate_idml(
             if cached:
                 final_translations[i] = cached
             else:
-                pending_texts.append(original)
+                pending_items.append(item)
                 pending_indices.append(i)
                 
-        logging.info(f"Motor -> Triagem: {len(payload)-len(pending_texts)} no cofre | {len(pending_texts)} para IA.")
+        logging.info(f"Motor -> Triagem: {len(payload)-len(pending_items)} no cofre | {len(pending_items)} para IA.")
 
-        # Processamento Assíncrono com a OpenAI
-        if pending_texts:
-            batches = translator.create_batches(pending_texts)
+        # Processamento Assíncrono com OpenAI
+        if pending_items:
+            batches = translator.create_batches(pending_items)
             
-            async def process_task(batch, chunk_texts, chunk_indices, batch_idx):
+            async def process_task(batch, chunk_items, chunk_indices, batch_idx):
                 try:
                     translated_batch = await translator.translate_batch(batch)
                     for j, translated_text in enumerate(translated_batch):
                         final_translations[chunk_indices[j]] = translated_text
-                        cache.set(chunk_texts[j], translated_text)
+                        
+                        # Cache cfeito APENAS pelo texto original
+                        cache.set(chunk_items[j]["original_text"], translated_text)
+                    
+                    # Salva o cache após cada lote processado
                     cache.save()
                     return True
                 except Exception as e:
@@ -104,9 +108,13 @@ async def translate_idml(
             
             tasks = []
             for i, batch in enumerate(batches):
-                chunk_texts = pending_texts[i*translator.batch_size : (i+1)*translator.batch_size]
-                chunk_indices = pending_indices[i*translator.batch_size : (i+1)*translator.batch_size]
-                tasks.append(process_task(batch, chunk_texts, chunk_indices, i+1))
+                start_idx = i * translator.batch_size
+                end_idx = (i + 1) * translator.batch_size
+                
+                chunk_items = pending_items[start_idx : end_idx]
+                chunk_indices = pending_indices[start_idx : end_idx]
+                
+                tasks.append(process_task(batch, chunk_items, chunk_indices, i + 1))
                 
             results = await asyncio.gather(*tasks, return_exceptions=True)
             if not all(results):
