@@ -66,6 +66,9 @@ class OpenAITranslator:
                 if isinstance(item, dict) and "id" in item and "traducao" in item
             }
 
+            # ? ----> JSON DEBUG FILE <---- ? #
+            #self._dump_diagnostic(batch_payloads, result_map)
+
             # Validação - A IA devolve o número exato de IDs solicitados?
             if len(result_map) != len(batch_payloads):
                 debug_data = {
@@ -116,3 +119,23 @@ class OpenAITranslator:
                     except:
                         sniper_results.append(texto)
                 return sniper_results
+
+    # Função auxiliar para logar em arquivo json
+    def _dump_diagnostic(self, batch_payloads: list[dict], result_map: dict):
+        """Salva silenciosamente TODOS os lotes processados para auditoria global."""
+        diagnostic_data = []
+        for i, item in enumerate(batch_payloads):
+            diagnostic_data.append({
+                "texto_alvo": item.get("texto_alvo"),
+                "contexto_macro": item.get("contexto_macro"),
+                "traducao_ia_bruta": result_map.get(i, "FALHA")
+            })
+            
+        debug_path = "data/output/debug_diagnostic_completo.json"
+        os.makedirs(os.path.dirname(debug_path), exist_ok=True)
+        
+        # O modo "a" (append) adiciona ao arquivo existente ou cria um novo
+        with open(debug_path, "a", encoding="utf-8") as f:
+            # Escreve cada item como uma linha JSON para não precisar carregar o array inteiro na memória depois
+            for item in diagnostic_data:
+                 f.write(json.dumps(item, ensure_ascii=False) + ",\n")

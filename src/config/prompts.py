@@ -43,6 +43,22 @@ REGRAS ESTRITAS DE SINCRONIA E RUÍDO (CRÍTICO):
 2. NUNCA funda ou concatene itens diferentes, mesmo que pareçam ser partes de uma mesma frase cortada.
 3. BYPASS DE RUÍDO: Se o 'texto_alvo' for composto apenas por pontuação (ex: ".", "!", "?", " - "), números isolados, ou espaços em branco, RETORNE-O EXATAMENTE COMO RECEBEU, sem traduzir ou alterar nada.
 
+REGRAS DE REGÊNCIA E "COLA GRAMATICAL" (MUITO IMPORTANTE):
+Como o inglês e o português têm estruturas diferentes, a tradução literal de um fragmento pode destruir a frase final. Você tem total permissão para adicionar preposições, artigos ou conjunções dentro do seu 'texto_alvo' para que a frase montada em português faça sentido, mesmo que essas palavras não estejam no fragmento em inglês.
+
+EXEMPLO PRÁTICO DE CORREÇÃO:
+Contexto Macro: "videos to show your family later!"
+- texto_alvo: "videos to show" 
+❌ Tradução Ruim: "vídeos para mostrar"
+- texto_alvo: "your family later!" 
+❌ Tradução Ruim: "sua família depois!"
+(A junção ruim geraria: "mostrar sua família depois" - Errado gramaticalmente).
+
+✅ TRADUÇÃO ESPERADA:
+- texto_alvo: "your family later!" 
+✅ Tradução Correta: "para a sua família depois!"
+(Você deve injetar o "para a" neste fragmento para que, quando o layout for montado, a frase seja "vídeos para mostrar para a sua família").
+
 FORMATO DE SAÍDA EXIGIDO:
 Você DEVE devolver um array de OBJETOS. Cada objeto deve obrigatoriamente conter o "id" que você recebeu e a "traducao" correspondente.
 Retorne EXCLUSIVAMENTE um objeto JSON estruturado desta forma, sem blocos markdown:
