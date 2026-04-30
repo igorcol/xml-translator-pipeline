@@ -12,6 +12,7 @@ O formato baseia-se em [Keep a Changelog](https://keepachangelog.com/), e este p
 
 ### Corrigido
 - **System Prompt Strict Rules:** Adição de travas de segurança explícitas no `config/prompts.py` (Persona) proibindo a IA de fundir ou concatenar fragmentos isolados (ex: strings que contêm apenas uma palavra ou pontuação), mitigando o comportamento "prestativo" do LLM de tentar consertar quebras visuais do InDesign.
+- **Entendimento de Contexto das Frases** ...
 ---
 
 ## [1.0.0-alpha.1] — Motor Web Isolado (Core Engine API)

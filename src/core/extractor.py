@@ -1,8 +1,6 @@
 import tempfile, shutil, logging, zipfile, os, re
 from lxml import etree
 
-# * Abre o arquivo IDML e pega os XMLs.
-
 # Configuração de log
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
@@ -10,12 +8,12 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 class IDMLExtractor:
     def __init__(self, idml_path: str):
         self.idml_path = idml_path
-        # Diretório temporario seguro
+        # Diretório temporario
         self.temp_dir = tempfile.mkdtemp(prefix="idml_pipeline_")
         self.stories_dir = os.path.join(self.temp_dir, "Stories")
         # Dicionário para manter os arquivos XML abertos na memória
         self.xml_trees = {} 
-        # Lista final que vai para o Gemini
+        # Lista final para a IA
         self.translation_payload = []
 
     def unzip(self) -> str:
@@ -48,6 +46,29 @@ class IDMLExtractor:
         )
         return story_files
 
+    # FUNÇÃO AUXILIAR DE CONTEXTUALIZAÇÃO
+    def _get_paragraph_context(self, node) -> str:
+        """
+        Sobe na árvore até achar o ParagraphStyleRange e concatena
+        .todo o texto legível daquele bloco para dar contexto à IA.
+        """
+        # Procura o ancestral que representa o parágrafo inteiro
+        ancestors = node.xpath("ancestor::*[local-name()='ParagraphStyleRange']")
+        
+        if ancestors:
+            # Pega o parágrafo
+            paragraph_node = ancestors[-1]
+            # Pega todos os nós de texto dentro deste parágrafo
+            contents = paragraph_node.xpath(".//*[local-name()='Content']")
+            # Concatena tudo mantendo os espaços originais para montar a frase
+            full_text = "".join([c.text for c in contents if c.text])
+            
+            # Removem excesso de espaços apenas nas pontas
+            return full_text.strip()
+            
+        # Fallback: Se o nó estiver solto sem parágrafo
+        return node.text.strip() if node.text else ""
+
     def parse_and_filter(self, story_files: list[str]) -> dict:
         """
         Varre os XMLs, extrai e filtra os textos.
@@ -62,8 +83,6 @@ class IDMLExtractor:
             tree = etree.parse(file_path)
             root = tree.getroot()
 
-            # XPath "//*[local-name()='Content']" ignora os namespaces da Adobe
-            # acha todas as tags <Content>
             contents = root.xpath("//*[local-name()='Content']")
 
             for content in contents:
@@ -71,10 +90,7 @@ class IDMLExtractor:
                 if not text:
                     continue
 
-                # Deve que ter pelo menos uma letra (a-z, A-Z)
-                # Sendo só número traços (------) ou ícones (▶) Regex ignora.
                 if re.search(r"[a-zA-Z]", text):
-                    # Remove os espaços grandes no texto
                     clean_text = text.strip()
                     valid_texts.append(clean_text)
                 else:
@@ -87,7 +103,7 @@ class IDMLExtractor:
         return {
             "valid_count": len(valid_texts),
             "bypass_count": bypass_count,
-            "sample": valid_texts[:5],  # Pega os 5 primeiros para validarmos
+            "sample": valid_texts[:5], 
         }
     
     def build_memory_map(self, story_files: list[str]):
@@ -98,7 +114,6 @@ class IDMLExtractor:
         
         for file_path in story_files:
             tree = etree.parse(file_path)
-            # Salva a árvore XML na memória para sobrescrever
             self.xml_trees[file_path] = tree 
             
             contents = tree.xpath("//*[local-name()='Content']")
@@ -110,15 +125,24 @@ class IDMLExtractor:
                 
                 if re.search(r'[a-zA-Z]', text):
                     clean_text = text.strip()
-                    # Guarda o nó original e o texto
+                    
+                    # Chama a função de contexto
+                    contexto_macro = self._get_paragraph_context(node)
+                    
+                    # O Payload agora é "tridimensional" (com contexto)
+                    #! Mantem a chave "original_text" apenas por retrocompatibilidade rápida
+                    #! com o CacheManager.
+                    # Adiciona o "texto_alvo" e "contexto_macro"
                     self.translation_payload.append({
                         "node": node, 
-                        "original_text": clean_text
+                        "original_text": clean_text, # A chave de cache antiga
+                        "texto_alvo": clean_text,    # O alvo real para a IA
+                        "contexto_macro": contexto_macro # O contexto macro
                     })
                 else:
                     bypass_count += 1
                     
-        logging.info(f"Mapeamento concluído: {len(self.translation_payload)} segmentos atrelados aos nós XML | {bypass_count} ignorados.")
+        logging.info(f"Mapeamento concluído com Consciência de Contexto: {len(self.translation_payload)} segmentos | {bypass_count} ignorados.")
         return self.translation_payload
 
     def cleanup(self):
