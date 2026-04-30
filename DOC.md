@@ -1,6 +1,6 @@
 # Documentação Técnica — IDML Translation Engine
 
-**Versão:** `v1.0.0-alpha.2`
+**Versão:** `v1.0.0-alpha.3`
 
 ---
 
