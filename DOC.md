@@ -97,8 +97,39 @@ Os itens "Pendentes" são processados de forma concorrente.
 
 ---
 
-## 4. Destaques do Código (Chaves de Engenharia)
+## 4. Desafios Técnicos & Engenharia de Soluções
 
-- **Type Hinting & Pydantic:** Código fracamente acoplado e estritamente tipado, garantindo validação de extensões e schemas nativos de request.
-- **Proteção de Mutabilidade (Split Brain Avoidance):** Atualizações do vetor final acontecem em uma lista pré-alocada (`[None] * len(payload)`), cujos índices foram salvos durante o desvio de memória na Triagem. Isso permite assincronismo desenfreado sem colisão de estado (race conditions na alocação da resposta).
-- **Modularidade:** A troca futura do modelo em cache JSON atual por um PostgreSQL/Redis/Supabase demanda a refatoração de apenas 1 arquivo (`cache_manager.py`), não exigindo intervenção no core do domínio.
+O problema mais difícil do projeto não foi parsear XML — foi dobrar uma LLM probabilística pra se comportar como função determinística sobre fragmentos sem contexto.
+
+### 4.1 O Problema: Fragmentação de Contexto
+
+O InDesign armazena texto de forma visual, não lógica. Uma frase como `"Save photos and videos to show your family later!"` é dividida em múltiplos nós `<Content>` isolados por causa de quebras de linha ou variações sutis de formatação. Sem visibilidade do todo, a IA traduz cada fragmento literal e isoladamente, e a remontagem produz português quebrado.
+
+### 4.2 Abordagem Descartada: Agrupamento por Separadores
+
+A primeira ideia foi concatenar fragmentos do mesmo `ParagraphStyleRange` com um delimitador (`fragmento_1 ||| fragmento_2`) e fazer split do retorno. Descartada antes de virar código por dois motivos:
+
+- **Inversão sintática EN→PT.** Em `"the |||red||| car"` → `"o carro |||vermelho|||"`, a posição do delimitador é trocada pela tradução. A injeção reversa colocaria texto no nó XML errado, quebrando a relação entre conteúdo e formatação.
+- **Viola o contrato arquitetural.** O `IDMLBuilder` opera sob a premissa "nó-folha = unidade atômica, mutação in-place". Agrupar fragmentos forçaria refatoração do Builder e do cache.
+
+A decisão foi não codar a solução errada e partir direto pra abordagem que preserva a arquitetura.
+
+### 4.3 Solução em Três Camadas
+
+**Camada 1 — Extração com contexto via XPath.** Cada nó-folha sobe na árvore (`ancestor::ParagraphStyleRange`) e captura a frase semântica completa do parágrafo. O payload deixa de ser string crua e vira objeto contextual:
+
+```python
+{"texto_alvo": "videos to show", "contexto_macro": "Save photos and videos to show your family later!"}
+```
+
+O `texto_alvo` continua sendo o único alvo de tradução e única chave de cache. O `contexto_macro` é metadado de leitura — alimenta a IA com base gramatical sem afetar o cache hit rate.
+
+**Camada 2 — ID Mapping Relacional.** Com payload mais rico, a IA passou a alucinar cardinalidade ocasionalmente (52 traduções pra 50 inputs). Solução: cada fragmento ganha um `id`, e a IA é obrigada a devolver `{"translations": {"1": "...", "2": "..."}}`. Qualquer id faltando, extra ou inventado é detectado deterministicamente. O Sniper Mode permanece como rede final, mas raramente é acionado depois dessa mudança.
+
+**Camada 3 — Few-Shot com Anti-Padrão.** Mesmo com contexto, a IA mantinha tradução literal e isolada do fragmento, ignorando regência verbal. `"videos to show"` + `"your family later"` virava `"vídeos para mostrar"` + `"sua família depois"` — corretos isoladamente, mas a junção `"mostrar sua família"` está gramaticalmente errada (verbo "mostrar" exige preposição). Solução: instrumentar o prompt com exemplo negativo e positivo lado a lado, autorizando explicitamente a injeção de conectivos (preposições, artigos) no fragmento certo. Modelos generativos respondem melhor a padrão concreto que a regra textual.
+
+### 4.4 Resultado
+
+A combinação das três camadas transformou a LLM de worker probabilístico em função quase-determinística pra tradução técnica fragmentada. A arquitetura original (nó-folha como unidade atômica, mutação in-place, IDMLBuilder intacto) foi preservada — toda a evolução aconteceu nas camadas de extração e prompting.
+
+---

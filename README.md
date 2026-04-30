@@ -142,6 +142,18 @@ Três decisões que separam protótipo de coisa que dá pra rodar 1.000 vezes se
 
 ---
 
+## Desafios resolvidos
+
+Construir tradução automatizada de `.idml` é menos sobre parsear XML e mais sobre dobrar uma LLM probabilística pra se comportar como função determinística. Os três problemas que mais me ensinaram:
+
+**Fragmentação semântica.** O InDesign quebra frases em nós XML isolados por causa de formatação ou quebra de linha. Mandar fragmentos crus pra LLM gera tradução literal sem coesão gramatical. Solução: extração com janela de contexto via XPath ascendente — cada `texto_alvo` viaja com o `contexto_macro` do parágrafo inteiro.
+
+**Alucinação de cardinalidade.** Mesmo com contexto, a LLM ocasionalmente devolvia 52 traduções pra um lote de 50. Solução: ID mapping relacional. Cada fragmento vira um objeto com `id`, e a IA é obrigada a devolver um dicionário `id → tradução`. Qualquer item a mais ou a menos é detectado e barrado antes de tocar no XML.
+
+**Preguiça gramatical.** Com contexto e ID mapping resolvidos, sobrou um bug sutil: a IA traduzia cada fragmento de forma isolada e gramaticalmente literal, ignorando a regência verbal que o contexto exigia. "videos to show" + "your family later" virava "vídeos para mostrar" + "sua família depois" — sem o "para a" que o português pede. Solução: few-shot com anti-padrão no system prompt, autorizando explicitamente a injeção de cola gramatical (preposições, artigos) no fragmento certo.
+
+---
+
 ## 📖 Deep Dive Técnico & Aprendizados
 
 Este README é apenas a superfície. Se quiser entender o fluxo de vida exato da requisição, como o split de filas em memória funciona (O(1)), e a dissecção completa do *Mecanismo de Auto-Cura*, leia o documento técnico:

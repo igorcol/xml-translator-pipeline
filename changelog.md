@@ -5,6 +5,24 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato baseia-se em [Keep a Changelog](https://keepachangelog.com/), e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ---
+## [1.0.0-alpha.3]
+
+### Added
+- **Context-Aware Translation:** O extrator agora mapeia a árvore XML (`ParagraphStyleRange`) para capturar e enviar o parágrafo completo (`contexto_macro`) como contexto de leitura para a IA.
+- **ID Mapping Relacional:** Implementação de um sistema de chaves (IDs) atreladas ao payload, forçando a IA a manter uma paridade determinística 1-para-1 na resposta e inviabilizando alucinações de quantidade.
+- **Interceptador de Ruído Nativo:** Bypass algorítmico (antes da chamada da API) que identifica e ignora strings contendo apenas pontuação ou espaços em branco, economizando tokens e evitando falsos positivos.
+- **Sistema de Diagnóstico Silencioso:** Criação da função `_dump_diagnostic` para interceptar e salvar os dados brutos de entrada/saída da IA em arquivos `.json` focados em auditoria (debug).
+
+### Changed
+- **Engenharia do System Prompt:** Reescrita total das regras de saída para exigir objetos JSON estruturados.
+- **Few-Shot Prompting Gramatical:** Adição de exemplos de antipadrões no prompt para forçar a IA a injetar preposições e "cola gramatical" na tradução baseada no contexto fornecido.
+- **Arquitetura de Payload Tridimensional:** A transição de dados entre o Motor, CLI e Rotas Web deixou de usar arrays de strings soltas para utilizar dicionários (`id`, `texto_alvo`, `contexto_macro`), mantendo a busca no Cache nativo em O(1).
+
+### Fixed
+- Erro fatal de Dessincronização de Lotes ("desync"), onde a LLM aglutinava ou desmembrava frases e retornava arrays com tamanhos incorretos (ex: devolvendo 52 itens em um lote de 50).
+- Quebra de sistema por falha de serialização (`Object of type _Element is not JSON serializable`), isolando e limpando os nós complexos do `lxml` antes de submetê-los aos métodos da biblioteca `json`.
+
+---
 ## [1.0.0-alpha.2] - Self-Healing Absoluto (Sniper Mode)
 
 ### Adicionado
@@ -12,7 +30,6 @@ O formato baseia-se em [Keep a Changelog](https://keepachangelog.com/), e este p
 
 ### Corrigido
 - **System Prompt Strict Rules:** Adição de travas de segurança explícitas no `config/prompts.py` (Persona) proibindo a IA de fundir ou concatenar fragmentos isolados (ex: strings que contêm apenas uma palavra ou pontuação), mitigando o comportamento "prestativo" do LLM de tentar consertar quebras visuais do InDesign.
-- **Entendimento de Contexto das Frases** ...
 ---
 
 ## [1.0.0-alpha.1] — Motor Web Isolado (Core Engine API)
